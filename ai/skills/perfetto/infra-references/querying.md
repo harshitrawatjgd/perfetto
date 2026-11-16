@@ -21,7 +21,8 @@ trace_processor server kill mysession                     # when completely done
 - Session state persists between calls: a `CREATE PERFETTO TABLE` or
   `INCLUDE PERFETTO MODULE` done once is available in the next call.
 - Several `;`-separated statements per call are fine. Each result set is
-  printed as CSV, separated by a blank line.
+  printed, separated by a blank line: CSV by default, or markdown tables when
+  `trace_processor` detects a coding agent (`--format csv` forces CSV).
 - Trace-loading flags (`--full-sort`, `--add-sql-package`, ...) go on the
   `server unix` invocation, not on `query --remote`.
 - `TRACE_FILE` may be a local path, an `http(s)://` URL or a Perfetto UI
@@ -29,6 +30,9 @@ trace_processor server kill mysession                     # when completely done
 - Idle sessions are reaped after 30 minutes; kill yours when done.
 - `trace_processor query TRACE_FILE "..."` without a session re-parses on
   every call. Use it only for a single quick question.
+- `--daemonize` is POSIX-only. On Windows, omit it and run the `server unix`
+  command as a background process; `query --remote` and `server kill` work
+  unchanged.
 
 ## 2. Discover, don't guess
 
@@ -98,18 +102,18 @@ Static references: <https://perfetto.dev/docs/analysis/stdlib-docs>,
 - Make statements re-runnable: `CREATE OR REPLACE PERFETTO TABLE|VIEW|FUNCTION|MACRO`.
   Virtual tables (`SPAN_JOIN`) do not support it: `DROP TABLE IF EXISTS x;`
   first.
-- Materialise expensive intermediates with `CREATE PERFETTO TABLE`
-  (required for `SPAN_JOIN` inputs).
+- Materialise expensive intermediates with `CREATE PERFETTO TABLE`.
 - For interval intersection prefer the `intervals.*` modules or
-  `SPAN_JOIN`. `SPAN_JOIN` needs integer `PARTITIONED` columns and
-  non-overlapping spans within a partition, otherwise it silently
-  produces wrong rows. Only fall back to manual arithmetic
+  `SPAN_JOIN`. `SPAN_JOIN` needs integer `PARTITIONED` columns, and
+  overlapping spans within a partition silently produce wrong rows. Only
+  fall back to manual arithmetic
   (`overlap iff start1 < end2 AND start2 < end1`,
   `dur = MIN(end1, end2) - MAX(start1, start2)`) when neither applies.
 - Event properties: `EXTRACT_ARG(arg_set_id, 'key')` rather than joining
   `args` by hand.
-- Slow query? `EXPLAIN QUERY PLAN`: `slice`/`counter` are indexed on `ts`
-  and `track_id`, other filters scan.
+- Slow query? On `slice`, `counter`, `sched` and `thread_state`, `id` and
+  `ts` are sorted, and `slice.track_id`, `slice.parent_id` and `sched.utid`
+  are indexed; filters on other columns of these tables scan.
 - Per-row `CREATE PERFETTO FUNCTION` calls are expensive; prefer plain
   SQL, CTEs and stdlib views.
 
